@@ -186,6 +186,3 @@ devices.list_devices()
 Currently the project is developed internally, public forks and contributions to the project are not supported. 
 
 Use of the github issues page to report bugs and requested features is highly encouraged.
-
-# License
-Copyright (c) Litmus Automation Inc.
