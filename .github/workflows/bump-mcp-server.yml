@@ -1,0 +1,80 @@
+name: Bump litmussdk in MCP server
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout litmus-mcp-server
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: litmusautomation/litmus-mcp-server
+          token: ${{ secrets.MCP_SERVER_TOKEN }}
+
+      - name: Resolve version
+        id: ver
+        run: |
+          RAW="${{ github.event.release.tag_name }}"
+          echo "version=${RAW#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Update pyproject.toml
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          python3 -c "
+          import re, os
+          v = os.environ['VERSION']
+          url = (
+              f'https://github.com/litmusautomation/litmus-sdk-releases'
+              f'/releases/download/{v}/litmussdk-{v}-py3-none-any.whl'
+          )
+          with open('pyproject.toml') as f:
+              content = f.read()
+          updated = re.sub(
+              r'(litmussdk\s*=\s*\{\s*url\s*=\s*\")[^\"]+(\"\s*\})',
+              rf'\g<1>{url}\g<2>',
+              content,
+          )
+          assert updated != content, 'Pattern not found in pyproject.toml — check the regex'
+          with open('pyproject.toml', 'w') as f:
+              f.write(updated)
+          print(f'Pinned litmussdk to {url}')
+          "
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        run: uv sync --group test
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
+
+      - name: Commit and push branch
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "chore/bump-litmussdk-${VERSION}"
+          git add pyproject.toml uv.lock
+          git commit -m "chore: bump litmussdk to ${VERSION}"
+          git push origin "chore/bump-litmussdk-${VERSION}"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ secrets.MCP_SERVER_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          gh pr create \
+            --repo litmusautomation/litmus-mcp-server \
+            --title "chore: bump litmussdk to ${VERSION}" \
+            --body "Automated bump triggered by the [${VERSION} SDK release](https://github.com/litmusautomation/litmus-sdk-releases/releases/tag/${VERSION}).
+
+          Tests passed on the new version before this PR was opened." \
+            --base main
