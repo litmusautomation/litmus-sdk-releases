@@ -1,19 +1,21 @@
 name: Bump litmussdk in MCP server
-
 on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   bump:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout litmus-mcp-server
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: litmusautomation/litmus-mcp-server
           token: ${{ secrets.MCP_SERVER_TOKEN }}
+          persist-credentials: true
 
       - name: Resolve version
         id: ver
@@ -25,7 +27,7 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          python3 -c "
+          python3 <<'PY'
           import re, os
           v = os.environ['VERSION']
           url = (
@@ -35,7 +37,7 @@ jobs:
           with open('pyproject.toml') as f:
               content = f.read()
           updated = re.sub(
-              r'(litmussdk\s*=\s*\{\s*url\s*=\s*\")[^\"]+(\"\s*\})',
+              r'(litmussdk\s*=\s*\{\s*url\s*=\s*")[^"]+("\s*\})',
               rf'\g<1>{url}\g<2>',
               content,
           )
@@ -43,9 +45,10 @@ jobs:
           with open('pyproject.toml', 'w') as f:
               f.write(updated)
           print(f'Pinned litmussdk to {url}')
-          "
+          PY
 
-      - uses: astral-sh/setup-uv@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.12"
 
@@ -60,7 +63,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "chore/bump-litmussdk-${VERSION}"
           git add pyproject.toml uv.lock
           git commit -m "chore: bump litmussdk to ${VERSION}"
@@ -77,4 +80,5 @@ jobs:
             --body "Automated bump triggered by the [${VERSION} SDK release](https://github.com/litmusautomation/litmus-sdk-releases/releases/tag/${VERSION}).
 
           Tests passed on the new version before this PR was opened." \
-            --base main
+            --base main \
+            --head "chore/bump-litmussdk-${VERSION}"
