@@ -16,9 +16,9 @@ Python **3.12 or newer** is required.
 
 | Litmus Edge Version | Support |
 |---------------------|---------|
-| `4.0.x`             | ✅ Default — actively tested |
-| `3.16.x` (LTS)      | ✅ Supported |
-| `3.11.x`            | ⚠️ Best-effort, not actively tested |
+| `4.0.x`  (LTS)               | ✅ Default — actively tested |
+| `3.16.x` (Previous LTS)      | ⚠️ Best-effort, not actively tested |
+| `3.11.x`                     | ⚠️ Best-effort, not actively tested |
 
 ---
 
