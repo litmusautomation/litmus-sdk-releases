@@ -1,13 +1,21 @@
 name: Bump litmussdk in MCP server
+run-name: "Bump litmussdk to ${{ github.event.release.tag_name || inputs.version }}"
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SDK release tag to bump to (e.g. 2.7.1)"
+        required: true
 
 permissions:
   contents: read
 
 jobs:
   bump:
+    # cli-v* releases ship the Go CLI binary, not the Python SDK wheel
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.release.tag_name, 'cli-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout litmus-mcp-server
@@ -20,7 +28,7 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
-          RAW="${{ github.event.release.tag_name }}"
+          RAW="${{ github.event.release.tag_name || inputs.version }}"
           echo "version=${RAW#v}" >> "$GITHUB_OUTPUT"
 
       - name: Update pyproject.toml
@@ -41,7 +49,7 @@ jobs:
               rf'\g<1>{url}\g<2>',
               content,
           )
-          assert updated != content, 'Pattern not found in pyproject.toml — check the regex'
+          assert updated != content, 'Pattern not found in pyproject.toml or URL already pinned'
           with open('pyproject.toml', 'w') as f:
               f.write(updated)
           print(f'Pinned litmussdk to {url}')
@@ -61,19 +69,30 @@ jobs:
       - name: Commit and push branch
         env:
           VERSION: ${{ steps.ver.outputs.version }}
+        # force-push so a republished release refreshes a leftover branch
+        # from an earlier run instead of failing on non-fast-forward
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "chore/bump-litmussdk-${VERSION}"
           git add pyproject.toml uv.lock
           git commit -m "chore: bump litmussdk to ${VERSION}"
-          git push origin "chore/bump-litmussdk-${VERSION}"
+          git push --force origin "chore/bump-litmussdk-${VERSION}"
 
       - name: Open pull request
         env:
           GH_TOKEN: ${{ secrets.MCP_SERVER_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
+          OPEN=$(gh pr list \
+            --repo litmusautomation/litmus-mcp-server \
+            --head "chore/bump-litmussdk-${VERSION}" \
+            --state open \
+            --json number --jq 'length')
+          if [ "$OPEN" != "0" ]; then
+            echo "PR already open for chore/bump-litmussdk-${VERSION}; branch was force-pushed with the fresh build"
+            exit 0
+          fi
           gh pr create \
             --repo litmusautomation/litmus-mcp-server \
             --title "chore: bump litmussdk to ${VERSION}" \
