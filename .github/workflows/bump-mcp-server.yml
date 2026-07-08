@@ -1,12 +1,12 @@
 name: Bump litmussdk in MCP server
-run-name: "Bump litmussdk to ${{ github.event.release.tag_name || inputs.version }}"
+run-name: "Bump ${{ github.event.release.tag_name || inputs.version }} in MCP server"
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: "SDK release tag to bump to (e.g. 2.7.1)"
+        description: "Release tag to bump to (e.g. 2.7.1 for the SDK wheel, cli-v0.2.0 for the CLI binary)"
         required: true
 
 permissions:
@@ -14,8 +14,11 @@ permissions:
 
 jobs:
   bump:
-    # cli-v* releases ship the Go CLI binary, not the Python SDK wheel
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.release.tag_name, 'cli-')
+    # cli-v* releases ship the Go CLI binary, not the Python SDK wheel;
+    # those are handled by the bump-cli job below
+    if: >-
+      (github.event_name == 'workflow_dispatch' && !startsWith(inputs.version, 'cli-')) ||
+      (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'cli-'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout litmus-mcp-server
@@ -101,3 +104,98 @@ jobs:
           Tests passed on the new version before this PR was opened." \
             --base main \
             --head "chore/bump-litmussdk-${VERSION}"
+
+  bump-cli:
+    # cli-v* releases ship the standalone litmus-sdk-cli Go binary that the
+    # MCP server Docker image installs; bump the pinned version in its Dockerfile
+    if: >-
+      (github.event_name == 'workflow_dispatch' && startsWith(inputs.version, 'cli-')) ||
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'cli-'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout litmus-mcp-server
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: litmusautomation/litmus-mcp-server
+          token: ${{ secrets.MCP_SERVER_TOKEN }}
+          persist-credentials: true
+
+      - name: Resolve tag
+        id: ver
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.version }}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # branch-friendly suffix without the cli- prefix, e.g. v0.2.0
+          echo "short=${TAG#cli-}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release binaries
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        # same download-and-checksum dance the Dockerfile does at build time,
+        # so a broken or incomplete release fails here instead of in docker build
+        run: |
+          BASE="https://github.com/litmusautomation/litmus-sdk-releases/releases/download/${TAG}"
+          cd "$(mktemp -d)"
+          curl -fsSL -o SHA256SUMS "${BASE}/SHA256SUMS"
+          for ARCH in amd64 arm64; do
+            curl -fsSL -o "litmus-sdk-cli-linux-${ARCH}" "${BASE}/litmus-sdk-cli-linux-${ARCH}"
+            grep "litmus-sdk-cli-linux-${ARCH}$" SHA256SUMS | sha256sum -c -
+          done
+
+      - name: Update Dockerfile
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          python3 <<'PY'
+          import re, os
+          tag = os.environ['TAG']
+          with open('Dockerfile') as f:
+              content = f.read()
+          updated = re.sub(
+              r'(ARG LITMUS_SDK_CLI_VERSION=)\S+',
+              rf'\g<1>{tag}',
+              content,
+          )
+          assert updated != content, 'ARG not found in Dockerfile or version already pinned'
+          with open('Dockerfile', 'w') as f:
+              f.write(updated)
+          print(f'Pinned litmus-sdk-cli to {tag}')
+          PY
+
+      - name: Commit and push branch
+        env:
+          SHORT: ${{ steps.ver.outputs.short }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        # force-push so a republished release refreshes a leftover branch
+        # from an earlier run instead of failing on non-fast-forward
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "chore/bump-sdk-cli-${SHORT}"
+          git add Dockerfile
+          git commit -m "chore: bump litmus-sdk-cli to ${TAG}"
+          git push --force origin "chore/bump-sdk-cli-${SHORT}"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ secrets.MCP_SERVER_TOKEN }}
+          SHORT: ${{ steps.ver.outputs.short }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          OPEN=$(gh pr list \
+            --repo litmusautomation/litmus-mcp-server \
+            --head "chore/bump-sdk-cli-${SHORT}" \
+            --state open \
+            --json number --jq 'length')
+          if [ "$OPEN" != "0" ]; then
+            echo "PR already open for chore/bump-sdk-cli-${SHORT}; branch was force-pushed with the fresh release"
+            exit 0
+          fi
+          gh pr create \
+            --repo litmusautomation/litmus-mcp-server \
+            --title "chore: bump litmus-sdk-cli to ${TAG}" \
+            --body "Automated bump triggered by the [${TAG} CLI release](https://github.com/litmusautomation/litmus-sdk-releases/releases/tag/${TAG}).
+
+          Release binaries were downloaded and checksum-verified against SHA256SUMS before this PR was opened. The Docker image installs the binary at build time, so the docker-build check on this PR exercises the new version." \
+            --base main \
+            --head "chore/bump-sdk-cli-${SHORT}"
