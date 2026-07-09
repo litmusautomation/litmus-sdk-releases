@@ -106,7 +106,7 @@ jobs:
             --head "chore/bump-litmussdk-${VERSION}"
 
   bump-cli:
-    # cli-v* releases ship the standalone litmus-sdk-cli Go binary that the
+    # cli-v* releases ship the standalone litmus-cli Go binary that the
     # MCP server Docker image installs; bump the pinned version in its Dockerfile
     if: >-
       (github.event_name == 'workflow_dispatch' && startsWith(inputs.version, 'cli-')) ||
@@ -138,8 +138,8 @@ jobs:
           cd "$(mktemp -d)"
           curl -fsSL -o SHA256SUMS "${BASE}/SHA256SUMS"
           for ARCH in amd64 arm64; do
-            curl -fsSL -o "litmus-sdk-cli-linux-${ARCH}" "${BASE}/litmus-sdk-cli-linux-${ARCH}"
-            grep "litmus-sdk-cli-linux-${ARCH}$" SHA256SUMS | sha256sum -c -
+            curl -fsSL -o "litmus-cli-linux-${ARCH}" "${BASE}/litmus-cli-linux-${ARCH}"
+            grep "litmus-cli-linux-${ARCH}$" SHA256SUMS | sha256sum -c -
           done
 
       - name: Update Dockerfile
@@ -152,14 +152,14 @@ jobs:
           with open('Dockerfile') as f:
               content = f.read()
           updated = re.sub(
-              r'(ARG LITMUS_SDK_CLI_VERSION=)\S+',
+              r'(ARG LITMUS_CLI_VERSION=)\S+',
               rf'\g<1>{tag}',
               content,
           )
           assert updated != content, 'ARG not found in Dockerfile or version already pinned'
           with open('Dockerfile', 'w') as f:
               f.write(updated)
-          print(f'Pinned litmus-sdk-cli to {tag}')
+          print(f'Pinned litmus-cli to {tag}')
           PY
 
       - name: Commit and push branch
@@ -173,7 +173,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "chore/bump-sdk-cli-${SHORT}"
           git add Dockerfile
-          git commit -m "chore: bump litmus-sdk-cli to ${TAG}"
+          git commit -m "chore: bump litmus-cli to ${TAG}"
           git push --force origin "chore/bump-sdk-cli-${SHORT}"
 
       - name: Open pull request
@@ -193,7 +193,7 @@ jobs:
           fi
           gh pr create \
             --repo litmusautomation/litmus-mcp-server \
-            --title "chore: bump litmus-sdk-cli to ${TAG}" \
+            --title "chore: bump litmus-cli to ${TAG}" \
             --body "Automated bump triggered by the [${TAG} CLI release](https://github.com/litmusautomation/litmus-sdk-releases/releases/tag/${TAG}).
 
           Release binaries were downloaded and checksum-verified against SHA256SUMS before this PR was opened. The Docker image installs the binary at build time, so the docker-build check on this PR exercises the new version." \
