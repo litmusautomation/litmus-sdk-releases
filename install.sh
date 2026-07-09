@@ -4,7 +4,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/litmusautomation/litmus-sdk-releases/main/install.sh | sh
 #
-# Downloads the latest cli-v* release of litmus-sdk-cli for this machine,
+# Downloads the latest cli-v* release of litmus-cli for this machine,
 # verifies it against SHA256SUMS, and installs it to ~/.local/bin.
 #
 # Environment overrides:
@@ -20,7 +20,6 @@
 set -eu
 
 REPO="litmusautomation/litmus-sdk-releases"
-BIN_NAME="litmus-sdk-cli"
 INSTALL_DIR="${LITMUS_CLI_INSTALL_DIR:-$HOME/.local/bin}"
 
 fail() { echo "install.sh: $*" >&2; exit 1; }
@@ -44,7 +43,6 @@ case "$os-$arch" in
   darwin-arm64|linux-amd64|linux-arm64) ;;
   *) fail "no prebuilt binary for $os-$arch. Download options: https://github.com/$REPO/releases" ;;
 esac
-asset="$BIN_NAME-$os-$arch"
 
 # --- resolve version (the releases repo also hosts Python SDK releases, so
 # --- 'latest' cannot be trusted; filter for the cli-v tag prefix) ---
@@ -61,9 +59,22 @@ base="https://github.com/$REPO/releases/download/$tag"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" || fail "download failed: $base/SHA256SUMS"
+
+# --- pick the binary name from the release manifest (renamed from
+# --- litmus-sdk-cli to litmus-cli in cli-v0.4.0; pinned older releases
+# --- keep the old asset names) ---
+if grep -q " litmus-cli-$os-$arch\$" "$tmp/SHA256SUMS"; then
+  BIN_NAME="litmus-cli"
+elif grep -q " litmus-sdk-cli-$os-$arch\$" "$tmp/SHA256SUMS"; then
+  BIN_NAME="litmus-sdk-cli"
+else
+  fail "no binary for $os-$arch listed in SHA256SUMS of $tag"
+fi
+asset="$BIN_NAME-$os-$arch"
+
 echo "Downloading $asset ($tag)..."
 curl -fsSL -o "$tmp/$asset" "$base/$asset" || fail "download failed: $base/$asset"
-curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" || fail "download failed: $base/SHA256SUMS"
 
 expected=$(grep " $asset\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)
 [ -n "$expected" ] || fail "$asset not listed in SHA256SUMS"
