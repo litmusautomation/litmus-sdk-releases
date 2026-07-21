@@ -55,6 +55,35 @@ All runtime dependencies are bundled — no extra installs needed.
 
 ---
 
+## CLI
+
+`litmus-cli` exposes every SDK function from the shell without writing Python. Useful for AI agents, CI pipelines, and interactive exploration. It is a standalone binary, not installed with this package:
+
+```bash
+# macOS / Linux install (detects platform, verifies checksum, installs to ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/litmusautomation/litmus-sdk-releases/main/install.sh | sh
+```
+
+```bash
+# List all available packages and functions
+litmus-cli list
+litmus-cli list le.devicehub
+
+# Configure a connection (stored in ~/.litmus/default.json)
+litmus-cli config set \
+  --EDGE_URL https://<device-ip> \
+  --EDGE_API_CLIENT_ID <client-id> \
+  --EDGE_API_CLIENT_SECRET <client-secret>
+
+# Call any SDK function
+litmus-cli run le.devicehub.ListDevices
+litmus-cli run lem.ListIncidents --args '{"projectID": "my-project"}'
+```
+
+Run `litmus-cli -h` for full usage and connection options. See **[CLI Reference](./docs/cli.md)** for details, including the migration table if you scripted the older pip-installed CLI (the command name, function paths, and JSON argument keys changed).
+
+---
+
 ## Quick Start
 
 ### 1 — Get credentials
