@@ -45,13 +45,16 @@ case "$os-$arch" in
 esac
 
 # --- resolve version (the releases repo also hosts Python SDK releases, so
-# --- 'latest' cannot be trusted; filter for the cli-v tag prefix) ---
+# --- 'latest' cannot be trusted; the API lists releases in no version order,
+# --- so take the highest cli-vX.Y.Z numerically) ---
 if [ -n "${LITMUS_CLI_VERSION:-}" ]; then
   tag="$LITMUS_CLI_VERSION"
 else
-  tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" |
-    grep -o '"tag_name": *"cli-v[^"]*"' | head -1 | cut -d'"' -f4)
-  [ -n "$tag" ] || fail "could not find a cli-v* release (set LITMUS_CLI_VERSION to pin one)"
+  version=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" |
+    grep -o '"tag_name": *"cli-v[0-9]*\.[0-9]*\.[0-9]*"' | cut -d'"' -f4 | sed 's/^cli-v//' |
+    sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+  [ -n "$version" ] || fail "could not find a cli-v* release (set LITMUS_CLI_VERSION to pin one)"
+  tag="cli-v$version"
 fi
 base="https://github.com/$REPO/releases/download/$tag"
 
