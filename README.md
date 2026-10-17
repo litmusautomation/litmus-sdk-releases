@@ -14,11 +14,13 @@ Python **3.12 or newer** is required.
 
 ## Supported Versions
 
-| Litmus Edge Version | Support |
-|---------------------|---------|
-| `4.0.x`  (LTS)               | ✅ Default — actively tested |
-| `3.16.x` (Previous LTS)      | ⚠️ Best-effort, not actively tested |
-| `3.11.x`                     | ⚠️ Best-effort, not actively tested |
+| Product | Python SDK (`litmussdk`) | CLI (`litmus-cli`, from `cli-v1.0.0`) |
+|---------|--------------------------|---------------------------------------|
+| Litmus Edge | `4.0.x` (LTS), default and actively tested; `3.16.x` and `3.11.x` best-effort | `4.4.x` (LTS); `4.0.x` best-effort |
+| Litmus Edge Manager | Supported, version not pinned | `3.0.x` (LTS); `2.31.x` best-effort |
+| Litmus Unify | Supported, version not pinned | `2.0.x` |
+
+Best-effort means not actively tested: functions added in the newer release are not available on the older one.
 
 ---
 
@@ -57,11 +59,18 @@ All runtime dependencies are bundled — no extra installs needed.
 
 ## CLI
 
-`litmus-cli` exposes every SDK function from the shell without writing Python. Useful for AI agents, CI pipelines, and interactive exploration. It is a standalone binary, not installed with this package:
+`litmus-cli` exposes every SDK function (about 1,250) from the shell without writing code. Useful for AI agents, CI pipelines, and interactive exploration. It is a standalone binary, not installed with this package, and is released here under `cli-v*` tags (latest: `cli-v1.0.0`).
+
+Supported product versions are in the [table above](#supported-versions). From `cli-v1.0.0` on, `run` paths and `--args` names stay stable within 1.x, so scripts written against one 1.x release keep working.
 
 ```bash
 # macOS / Linux install (detects platform, verifies checksum, installs to ~/.local/bin)
 curl -fsSL https://raw.githubusercontent.com/litmusautomation/litmus-sdk-releases/main/install.sh | sh
+
+# Windows: download litmus-cli-windows-amd64.exe from the latest cli-v* release
+
+# Update an installed CLI in place
+litmus-cli update
 ```
 
 ```bash
@@ -80,7 +89,7 @@ litmus-cli run le.devicehub.ListDevices
 litmus-cli run lem.ListIncidents --args '{"projectID": "my-project"}'
 ```
 
-Run `litmus-cli -h` for full usage and connection options. See **[CLI Reference](./docs/cli.md)** for details, including the migration table if you scripted the older pip-installed CLI (the command name, function paths, and JSON argument keys changed).
+Run `litmus-cli -h` for full usage and connection options. See the **[CLI guide](https://api.litmus.io/cli.md)** for details. If you scripted the older pip-installed CLI, the [migration table](https://api.litmus.io/sdk-agents.md) lists what changed (the command name, function paths, and JSON argument keys).
 
 ---
 
